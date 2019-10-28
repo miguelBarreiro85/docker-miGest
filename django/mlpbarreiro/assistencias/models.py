@@ -1,0 +1,111 @@
+import datetime
+from django.db import models
+from django.utils import timezone
+from django.contrib.auth.models import User
+from django.core.validators import RegexValidator
+import logging
+from django.core.mail import send_mail
+logger=logging.getLogger(__name__)
+
+class Assistencia(models.Model):
+    ESTADOS = (
+        (21,'Não aceite o orçamento'),
+        (23,'Facturado'),
+        (34,'Creditado ao cliente'),
+        (33,'Não reparado em armazem'),
+        (31, 'Reparado em armazem'),
+        (24,'Sem avaria'),
+        (20,'Sem reparação'),
+        (26, 'Garantia resolvido'),
+        (27,'Cliente resolveu'),
+        (28,'Resolvido comprou nova'),
+        (18,'Enviado para reciclagem'),
+        (29,'anulado'),
+        (8,'Aguardar contacto do cliente'),
+        (14,'Não pago'),
+        (36,'Facturado e Pago'),
+        (30,'Supostamente Resolvido'),
+        (23,'Facturado'),
+        (2,'Em resolução'),
+        (19,'Reparação sem valor'),
+        (3, 'Resolvido')
+    )
+    cliente = models.ForeignKey('Cliente',related_name="cliente",on_delete=models.PROTECT)
+    funcionario = models.ForeignKey('Funcionario', on_delete=models.PROTECT, null=True, blank = True)
+    topico = models.CharField(max_length=350)
+    descricao = models.TextField(max_length=1000,null=True, blank=True)
+    orcamento = models.TextField(max_length=1000,null=True, blank = True) 
+    data = models.DateTimeField(auto_now_add=True)
+    custo = models.DecimalField(decimal_places=2,max_digits=5, blank=True,null=True)
+    valor = models.DecimalField(decimal_places=2,max_digits=5, blank=True,null=True)
+    foto = models.FileField(blank=True,null=True,upload_to='photos/')
+    estado = models.IntegerField(choices=ESTADOS,blank=True,null=True,default=2)
+
+    @property
+    def get(self):
+        data = {'funcionario':self.funcionario.user.username,
+                'topico':self.topico,
+                'descricao':self.descricao,'valor':self.valor
+                }
+        return data
+
+    @property
+    def getToEmail(self):
+        data2 = 'Cliente:' + self.cliente.nome + '\rMorada:' + '\rTopico: ' + self.topico + '\rDescricao: ' + self.descricao 
+        return data2
+
+    def __str__(self):
+        if not self.get_estado_display():
+            return '\t' + str(self.data.date()) + '\t\t' + self.get_estado_display() + '\t\t' + self.topico
+        return '\t' + str(self.data.date()) + '\t\t' + self.topico
+    @property
+    def sendAssistencia(self):
+        id=self.id
+        funcionario = self.funcionario.nome
+        cliente = self.cliente.nome
+        topico = self.topico
+        descricao = self.descricao
+        valor = float(self.valor)
+        jsonObj = {'id':id,'cliente':cliente,'topico':topico,'descricao':descricao,
+                   'valor':valor}
+        logger.error("borala",jsonObj)
+        return jsonObj
+    
+    @property
+    def send_mail(self):
+        Obje = self.getToEmail
+        send_mail(
+                'Assistencia Tecnica',
+                Obje,
+                'mlpbarreiro@gmail.com',
+                ['mlpbarreiro@gmail.com'],
+                fail_silently=False,
+            )
+    readonly_fields=('id')
+    #def save(self, *args, **kwargs):
+     #   self.send_mail
+      #  super().save(*args, **kwargs)
+
+class Pessoa(models.Model):
+    phone_regex = RegexValidator(regex=r'\d{9,15}$', message="Numero não é válido")
+    telefone = models.IntegerField(validators=[phone_regex], blank=True, null=True) # validators should be a list
+    telemovel = models.IntegerField(validators=[phone_regex], blank=True, null=True) # validators should be a list
+    nome = models.CharField(max_length=150)
+    email = models.EmailField(blank=True,null=True)
+    morada = models.CharField(max_length=250,blank=True,null=True)
+    localidade = models.CharField(max_length=150,blank=True,null=True)
+    codigo_postal = models.CharField(max_length=50,blank=True,null=True)
+    nif = models.IntegerField(blank=True, null=True)
+    rgpd = models.BooleanField(default=False)
+    def __str__(self):
+       return self.nome
+
+class Funcionario(models.Model):
+    user = models.OneToOneField(User, on_delete=models.PROTECT)
+    def __str__(self):
+        return self.user.username
+
+class Cliente(Pessoa):
+    assistencias = models.ManyToManyField(Assistencia,related_name="assistencia")
+    def __str__(self):
+       return super(Cliente, self).nome

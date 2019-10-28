@@ -1,0 +1,31 @@
+{% load static %}
+<link rel="stylesheet" type="text/css" href="{% static 'assistencias/style.css' %}" />
+<p>ASSISTENCIAS</p>
+<ul class="menu">
+  <li><a href="#Pedidos">Pedidos</a></li>
+  <li><a href="{% url 'assistencias:index' %}">Assistencias</a></li>
+  <li><a href="#Contactos">Contactos</a></li>
+  <li><a href="#Sobre">Sobre</a></li>
+</ul>
+
+
+{% if error_message %}<p><strong>{{ error_message }}</strong></p>{% endif %}
+<div class="container">
+    <div class="formCliente">
+        <form action="{% url 'assistencias:atualiza_cliente' cliente.id %}" method="post">
+            {% csrf_token %}
+            {{form.as_p}}
+            <input type="submit" value="Atualizar" />
+        </form>
+    </div>
+    <div class="formAssistencia">
+        <form action="{% url 'assistencias:nova_assistencia' cliente.id%}" method="post">
+            {% csrf_token %}
+            {{formAssistencia.topico_text}}
+            {{formAssistencia.descricao_text}}
+            {{}}
+            <input type="submit" value="Submeter Pedido" />
+        </form>
+    </div>
+</div>
+

@@ -1,0 +1,342 @@
+from django.contrib import admin
+from .models import Assistencia, Pessoa, Cliente, Funcionario, User
+from django.utils.html import format_html
+from django.urls import reverse
+from django.conf.urls import url
+from django.conf import settings
+from django.http import HttpResponse
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import inch
+from reportlab.platypus.flowables import Preformatted
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Image, PageBreak
+from io import BytesIO
+from django.utils.timezone import now
+from django.db import models
+from django.contrib import messages
+from django.utils.safestring import mark_safe
+
+import logging
+
+logger=logging.getLogger(__name__)
+
+class AssistenciaInline(admin.StackedInline):
+    model = Assistencia
+    extra=0
+    ordering = ['-data']
+    readonly_fields = ['FO','imprimir','talao','data','custo','orcamento']
+    can_delete = False
+
+    def FO(self, obj):
+        return obj.id
+
+    def imprimir(self, obj):
+        return format_html(
+            '<a class="button" href="{}">Print</a>&nbsp;',
+            reverse('admin:print-assist', args=[obj.pk]),
+        )
+    def talao(self, obj):
+        return format_html(
+            '<a class="button" href="{}">Talão</a>&nbsp;',
+            reverse('admin:print-assist-talao', args=[obj.pk]),
+        )
+
+class AssistenciaAdmin(admin.ModelAdmin):
+    ordering = ['-data']
+    search_fields=['id','cliente__nome','cliente__morada','cliente__localidade','cliente__telefone','cliente__telemovel','topico','descricao','valor','data','custo','valor','estado']
+    list_display=('id','cliente','topico','descricao','estado','data','imprimir','talao',)
+    list_display_links=('id','cliente','topico')
+    actions=['send_email','imprimir_assistencias']
+    autocomplete_fields=['cliente']
+    readonly_fields = ['imprimir','talao',]
+    list_filter = ['estado','funcionario','data']
+
+    def save_model(self, request, obj, form, change):
+        messages.add_message(request, messages.INFO, mark_safe("<a href='http://"+ str(request.META['HTTP_HOST']) + "/admin/assistencias/assistencia/" + str(obj.id) + "/print/'> Download Folha Obra </a>"))
+        super().save_model(request, obj, form, change)
+
+
+
+
+    def get_list_filter(self, request):
+        list_filter = super().get_list_filter(request)
+        try:
+            if (Funcionario.objects.get(user=request.user)):
+                list_filter = []
+                return list_filter
+        except:
+            return list_filter
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        try:
+            if (Funcionario.objects.get(user=request.user)):
+                if 'imprimir_assistencia' in actions:
+                    del actions['delete_selected']
+                    return actions
+        except:
+            return actions
+
+    def get_list_display(self, request):
+        try:
+            if Funcionario.objects.get(user=request.user):
+                self.list_display=('id','topico','descricao','orcamento','data')
+                return super().get_list_display(request)
+        except:
+            self.list_display=('id','cliente','topico','descricao','estado','data','imprimir','talao',)
+        return super().get_list_display(request)
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            url(
+                r'^(?P<assistencia_id>.+)/print/$',
+                self.admin_site.admin_view(self.print_assist),
+                name='print-assist',
+            ),
+            url(
+                r'^(?P<assistencia_id>.+)/print_talao/$',
+                self.admin_site.admin_view(self.print_talao),
+                name='print-assist-talao',
+            )
+        ]
+        return custom_urls + urls
+
+    def get_form(self, request, obj=None, **kwargs):
+        try:
+            if Funcionario.objects.get(user=request.user):
+                self.exclude = ['valor','cliente','funcionario','estado','imprimir','talao']
+                self.readonly_fields = ['id','topico','descricao','data']
+                self.actions = []
+                return super().get_form(request, obj, **kwargs)
+        #se der erro é porque o utlilizador não está na lista de funcionarios
+        except:
+            self.exclude = []
+            self.readonly_fields = ['id','custo','orcamento','imprimir','talao']
+            return super().get_form(request, obj, **kwargs)
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        user = User.objects.get(username=request.user)
+        if request.user.is_superuser:
+            return qs
+        try:
+            return qs.filter(funcionario=Funcionario.objects.get(user=request.user), estado=2)
+        #se for outro tipo de usario que não seja funcionario
+        except:
+            return qs
+
+    def send_email(self, request, queryset):
+        for obj in queryset:
+            Obje=obj.sendMail
+
+    def imprimir_assistencias(self, request, queryset):
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = 'inline; filename="assistencia.pdf"'
+        stylesheet=getSampleStyleSheet()
+        normalStyle = stylesheet['Normal']
+        normalStyle.wordWrap = 'LTR'
+
+        buff = BytesIO()
+        doc = SimpleDocTemplate(buff, pagesize=A4, leftMargin=15, rightMargin=1)
+        text = []
+        text.append(Paragraph("Listagem de: " + str(now()), stylesheet['title']))
+        for assistencia in queryset:
+            text.append(Paragraph(str(assistencia.id) + "\t" + str(assistencia.data) + "\t" + assistencia.cliente.nome, normalStyle))
+            if assistencia.cliente.morada:
+                text.append(Paragraph(assistencia.cliente.morada, normalStyle))
+            descricao = str(assistencia.descricao).replace('\n', '<br/>\n')
+            text.append(Paragraph(assistencia.topico + "\t" + descricao, normalStyle))
+            text.append(Paragraph("<br/>-----------------------------------------------------------------------------------------\
+            ---------------------------------------------------------------------", normalStyle))
+        doc.build(text)
+        response.write(buff.getvalue())
+        buff.close()
+        return response
+
+    def print_talao(self, request, assistencia_id, *args, **kwargs):
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = 'inline; filename="assistencia.pdf"'
+
+        stylesheet=getSampleStyleSheet()
+        normalStyle = stylesheet['Normal']
+
+        buff = BytesIO()
+        doc = SimpleDocTemplate(buff, pagesize=(212,500),leftMargin=15,rightMargin=1)
+
+        assistencia = Assistencia.objects.get(id=assistencia_id)
+
+        text = []
+        text.append(Paragraph("MLP BARREIRO LDA", normalStyle))
+        text.append(Paragraph("Rua Rei da Memória nº14", normalStyle))
+        text.append(Paragraph("2475-149 Benedita", normalStyle))
+        text.append(Paragraph("T 262921512 / 917060394", normalStyle))
+        text.append(Paragraph("@ mlpbarreiro@gmail.com", normalStyle))
+        text.append(Paragraph("@ www.mlpbarreiro.pt", normalStyle))
+        text.append(Paragraph("<br/>--------------------------------------------------------", normalStyle))
+        text.append(Paragraph("<br/>FO: "+assistencia_id, normalStyle))
+        if assistencia.cliente.nome:
+            text.append(Paragraph(assistencia.cliente.nome, normalStyle))
+        text.append(Paragraph("<br/>--------------------------------------------------------", normalStyle))
+        if assistencia.topico:
+            text.append(Paragraph(assistencia.topico, normalStyle))
+        if assistencia.descricao:
+            text.append(Paragraph(assistencia.descricao, normalStyle))
+        doc.build(text)
+        response.write(buff.getvalue())
+        buff.close()
+        return response
+
+    def print_assist(self, request, assistencia_id, *args, **kwargs):
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = 'inline; filename="assistencia.pdf"'
+
+        stylesheet=getSampleStyleSheet()
+        normalStyle = stylesheet['Normal']
+
+        buff = BytesIO()
+        doc = SimpleDocTemplate(buff, pagesize=A4)
+
+        assistencia = Assistencia.objects.get(id=assistencia_id)
+
+        text = []
+        text.append(Paragraph("MLP BARREIRO LDA", normalStyle))
+        text.append(Paragraph("Rua Rei da Memória nº14", normalStyle))
+        text.append(Paragraph("2475-149 Benedita", normalStyle))
+        text.append(Paragraph("T 262921512 / 917060394", normalStyle))
+        text.append(Paragraph("@ mlpbarreiro@gmail.com", normalStyle))
+        text.append(Paragraph("@ www.mlpbarreiro.pt", normalStyle))
+        text.append(Paragraph("<br/>--------------------------------------------------------", normalStyle))
+        text.append(Paragraph("<br/>FO: "+ str(assistencia_id), normalStyle))
+        text.append(Paragraph("Data "+str(assistencia.data.date()), normalStyle))
+        if assistencia.cliente.nome:
+            text.append(Paragraph("Nome: " + assistencia.cliente.nome, normalStyle))
+        if assistencia.cliente.telefone:
+            text.append(Paragraph("Telefone: " + str(assistencia.cliente.telefone), normalStyle))
+        if assistencia.cliente.telemovel:
+            text.append(Paragraph("Telemovel: " + str(assistencia.cliente.telemovel), normalStyle))
+        if assistencia.cliente.morada:
+            text.append(Paragraph("Morada: " + assistencia.cliente.morada, normalStyle))
+        if assistencia.cliente.localidade:
+            text.append(Paragraph("Localidade: " + assistencia.cliente.localidade, normalStyle))
+        if assistencia.cliente.codigo_postal:
+            text.append(Paragraph("Codigo Postal: " + assistencia.cliente.codigo_postal, normalStyle))
+        text.append(Paragraph("<br/>--------------------------------------------------------", normalStyle))
+        if assistencia.topico:
+            text.append(Paragraph("Topico: " + assistencia.topico, normalStyle))
+        if assistencia.descricao:
+            text.append(Paragraph("<br/>--------------------------------------------------------", normalStyle))
+            descricao = str(assistencia.descricao).replace('\n', '<br/>\n')
+            text.append(Paragraph("Descricao: " + descricao, normalStyle))
+        if not assistencia.cliente.rgpd:
+            text.append(PageBreak())
+            text.append(Paragraph("MLP BARREIRO LDA", normalStyle))
+            text.append(Paragraph("Rua Rei da Memória nº14", normalStyle))
+            text.append(Paragraph("2475-149 Benedita", normalStyle))
+            text.append(Paragraph("T 262921512 / 917060394", normalStyle))
+            text.append(Paragraph("NC 509502652", normalStyle))
+            text.append(Paragraph("@ mlpbarreiro@gmail.com", normalStyle))
+            text.append(Paragraph("@ www.mlpbarreiro.pt<br/><br/><br/><br/><br/>", normalStyle))
+            text.append(Paragraph("<b>NOVO REGULAMENTO GERAL SOBRE PROTEÇÃO DE DADOS</b><br/><br/>", normalStyle))
+            text.append(Paragraph("Autorizo o tratamento dos meus dados pela MLP-BARREIRO-COMERCIO DE ELECTRODOMÉSTICOS, LDª, para processamento de faturas/recibos, notas de crédito e documentos equivalentes, referente ao equipamento e serviços comercializados pela empresa, e ainda na prestação de serviços de assistência técnica ou outros por mim solicitados. Bem como para envio por correio, e-mail e SMS, de comunicações promocionais e de marketing directo relativas a produtos e serviços comercializados pela empresa.<br/><br/>", normalStyle))
+            text.append(Paragraph("A retirada do consentimento não compromete a licitude do tratamento efetuado com base no consentimento previamente dado. Adicionalmente, posso solicitar, a qualquer momento, informações relativas aos meus dados conservados na MLP-BARREIRO, LDª através dos canais de comunicação indicados, bem como solicitar, a qualquer momento, que os meus dados pessoais sejam corrigidos, eliminados ou bloqueados, exceto quando o tratamento ainda seja necessário para cumprimentos de obrigação legal.<br/><br/>", normalStyle))
+            text.append(Paragraph("Estes consentimentos podem ser retirados a qualquer momento, contactando através de:<br/><br/> Correio: MLP-BARREIRO-COMERCIO DE ELECTRODOMÉSTICOS <br/>RUA REI DA MEMÓRIA, Nº14 <br/>2475-149 BENEDITA <br/><br/>E-mail: mlpbarreiro@gmai.com<br/><br/><br/><br/>", normalStyle))
+
+            if assistencia.cliente.nome:
+                text.append(Paragraph(
+                    "Nome:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" + assistencia.cliente.nome + "<br/><br/>",
+                    normalStyle))
+            else:
+                text.append(Paragraph(
+                    "Nome:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_________________________________________________________________<br/><br/>",
+                    normalStyle))
+            if assistencia.cliente.morada:
+                text.append(Paragraph(
+                    "Morada:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" + assistencia.cliente.morada + "<br/><br/>",
+                    normalStyle))
+            else:
+                text.append(Paragraph("Morada:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_________________________________________________________________<br/><br/>", normalStyle))
+            if assistencia.cliente.nif:
+                text.append(
+                    Paragraph(
+                        "NIF:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" + str(assistencia.cliente.nif) + "<br/><br/>",
+                        normalStyle))
+            else:
+                text.append(Paragraph(
+                    "NIF:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;________________________________________________________________<br/><br/>",
+                    normalStyle))
+            if assistencia.cliente.telefone:
+                text.append(
+                    Paragraph(
+                        "Telefone:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" + str(assistencia.cliente.telefone) + "<br/><br/>",
+                        normalStyle))
+            else:
+                text.append(Paragraph("Telefone:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;________________________________________________________________<br/><br/>", normalStyle))
+            if assistencia.cliente.telemovel:
+                text.append(
+                    Paragraph(
+                        "Telemovel:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" + str(assistencia.cliente.telemovel)+ "<br/><br/>",
+                        normalStyle))
+            else:
+                text.append(Paragraph(
+                    "Telemovel:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;________________________________________________________________<br/><br/>",
+                    normalStyle))
+            if assistencia.cliente.email:
+                text.append(Paragraph(
+                    "Email:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" + assistencia.cliente.email + "<br/><br/>",
+                    normalStyle))
+            else:
+                text.append(Paragraph("Email:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_________________________________________________________________<br/><br/>", normalStyle))
+
+            text.append(Paragraph("Assinatura:&nbsp; _____________________________________________________________________<br/><br/>", normalStyle))
+        doc.build(text)
+        response.write(buff.getvalue())
+        buff.close()
+        return response
+
+    def imprimir(self, obj):
+        return format_html(
+            '<a class="button" href="{}">Print</a>&nbsp;',
+            reverse('admin:print-assist', args=[obj.pk]),
+        )
+
+    def talao(self, obj):
+        return format_html(
+            '<a class="button" href="{}">Talão</a>&nbsp;',
+            reverse('admin:print-assist-talao', args=[obj.pk]),
+        )
+    imprimir.short_description = 'Imprimir'
+    imprimir.allow_tags = True
+    talao.short_description = 'talao'
+    talao.allow_tags = True
+
+class ClienteAdmin(admin.ModelAdmin):
+    inlines = [
+        AssistenciaInline,
+    ]
+    list_display = ('id','nome','telefone','telemovel','morada','localidade')
+    list_display_links = ('id','nome','telefone','telemovel','morada','localidade')
+    search_fields=['id','nome','telefone','telemovel','localidade','morada']
+    exclude=['assistencias']
+    read_only = ('id')
+    formfield_overrides = {
+        models.IntegerField: {'widget': admin.widgets.AdminTextInputWidget()},
+    }
+    fieldsets = (
+        (None, {
+            'fields': ('nome',('telefone','telemovel'),'morada',('localidade','codigo_postal'),'email','rgpd')
+        }),
+    )
+
+
+class PessoaAdmin(admin.ModelAdmin):
+    search_fields=['nome']
+
+
+
+admin.site.register(Assistencia,AssistenciaAdmin)
+admin.site.register(Pessoa,PessoaAdmin)
+admin.site.register(Cliente,ClienteAdmin)
+admin.site.register(Funcionario)
+# Register your models here.

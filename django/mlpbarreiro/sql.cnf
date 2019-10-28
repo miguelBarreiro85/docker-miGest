@@ -1,0 +1,7 @@
+# my.cnf
+[client]
+database = mlp_assist
+user = root
+password = LMsb9170+
+default-character-set = utf8
+host = db_migest
