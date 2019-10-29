@@ -1,7 +1,0 @@
-# my.cnf
-[client]
-database = my_db
-user = my_user
-password = my_password
-default-character-set = utf8
-host = db_migest
