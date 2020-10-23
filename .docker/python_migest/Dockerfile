@@ -1,4 +1,4 @@
-FROM python:3.5
+FROM python:3.8
 #Context docker-compose
 COPY ./python_migest/requirements.txt /
 

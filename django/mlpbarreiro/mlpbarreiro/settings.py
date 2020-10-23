@@ -82,7 +82,8 @@ WSGI_APPLICATION = 'mlpbarreiro.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.mysql',
+        #'ENGINE': 'django.db.backends.mysql',
+        'ENGINE': 'mysql.connector.django',
         'OPTIONS': {
             'read_default_file': '/home/miguel/django/mlpbarreiro/sql.cnf',
         },
