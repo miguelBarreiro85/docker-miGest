@@ -1,4 +1,4 @@
 .docker/mysql/.env
 .docker/mysql/databases.sql
-db_databases/
+db_databases/*
 django/mlpbarreiro/sql.cnf
