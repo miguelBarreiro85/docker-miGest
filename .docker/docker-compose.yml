@@ -1,34 +1,37 @@
 # Use root/example as user/password credentials
 version: "3.7"
 services:
-  web:
+  web_migest:
     image: nginx
     volumes:
-     - ./web/rma_mlp:/etc/nginx/conf.d/rma.local.conf
+     - ./web/rma_mlp:/etc/nginx/conf.d/rma2.mlpbarreiro.com.conf
      - ../django/static:/home/miguel/django/static
     expose:
       - 80
     environment:
-     - VIRTUAL_HOST=rma.local 
+      - VIRTUAL_HOST=rma2.mlpbarreiro.com
+      - LETSENCRYPT_HOST=rma2.mlpbarreiro.com
+      - LETSENCRYPT_EMAIL=mlpbarreiro@gmail.com
     links: 
       - python_migest
     restart: always
+    networks: 
+      - webproxy
+      - migest
   python_migest:
     build:
       context: .
       dockerfile: ./python_migest/Dockerfile
     volumes:
       - ../django:/home/miguel/django
-    #command: bash -c "cd /home/miguel/django/mlpbarreiro && gunicorn -b 0.0.0.0:8000 mlpbarreiro.wsgi"
-    #command: bash -c "python /home/miguel/django/mlpbarreiro/manage.py migrate
-     #        && python /home/miguel/django/mlpbarreiro/manage.py runserver 0.0.0.0:8000"
-    #command: bash -c "python /home/miguel/django/mlpbarreiro/manage.py runserver 0.0.0.0:8000"
     command: bash -c "cd /home/miguel/django/mlpbarreiro && gunicorn --bind 0.0.0.0:8001 mlpbarreiro.wsgi"
     depends_on: 
       - db_migest
     expose: 
       - 8001
     restart: always
+    networks: 
+      - migest
   db_migest:
     build:
       context: .
@@ -37,13 +40,13 @@ services:
     restart: always
     volumes: 
       - dbdata:/var/lib/mysql
-  adminer:
-    image: adminer
-    restart: always
-    expose:
-      - 8080
-    environment: 
-      - VIRTUAL_HOST=adminer.local
-      - VIRTUAL_PORT=8080
+      - ../db_backups:/db_backups
+    networks: 
+      - migest
+    env_file: ./mysql/.env
 volumes: 
   dbdata:
+networks:
+  migest:
+  webproxy: 
+    external: true

@@ -1,3 +1,4 @@
-.idea/
-.docker/mysql.env
+.docker/mysql/.env
+.docker/mysql/databases.sql
+db_databases/
 django/mlpbarreiro/sql.cnf

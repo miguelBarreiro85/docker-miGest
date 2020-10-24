@@ -1,6 +1,6 @@
 server {
     listen 80;
-    server_name rma.local;
+    server_name rma2.mlpbarreiro.com;
 
     access_log  /var/log/nginx/rma.access.log;
     #location = /favicon.ico { access_log off; log_not_found off; }
@@ -9,17 +9,8 @@ server {
     }
 
     location / {
-        #include proxy_params;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header Host $host;
         proxy_pass http://python_migest:8001;
-        #proxy_pass http://unix:/home/miguel/django/migest.sock;
     }
-
-    #listen 443 ssl; # managed by Certbot
-    #ssl_certificate /etc/letsencrypt/live/rma.mlpbarreiro.com/fullchain.pem; # managed by Certbot
-    #ssl_certificate_key /etc/letsencrypt/live/rma.mlpbarreiro.com/privkey.pem; # managed by Certbot
-    #include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
-    #ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
-
 }
