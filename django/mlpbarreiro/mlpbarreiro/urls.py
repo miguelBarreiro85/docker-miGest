@@ -23,6 +23,7 @@ urlpatterns = [
     path('assistencias/', include('assistencias.urls')),
 ]
 
+urlpatterns
 admin.site.site_header = 'MLP ASSISTENCIAS'
 admin.site.site_title = 'MLP ASSISTENCIAS'
 

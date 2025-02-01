@@ -1,52 +1,37 @@
 # Use root/example as user/password credentials
 version: "3.7"
 services:
-  web_migest:
-    image: nginx
-    volumes:
-     - ./web/rma_mlp:/etc/nginx/conf.d/rma2.mlpbarreiro.com.conf
-     - ../django/static:/home/miguel/django/static
-    expose:
-      - 80
-    environment:
-      - VIRTUAL_HOST=rma2.mlpbarreiro.com
-      - LETSENCRYPT_HOST=rma2.mlpbarreiro.com
-      - LETSENCRYPT_EMAIL=mlpbarreiro@gmail.com
-    links: 
-      - python_migest
-    restart: always
-    networks: 
-      - webproxy
-      - migest
   python_migest:
     build:
       context: .
       dockerfile: ./python_migest/Dockerfile
     volumes:
       - ../django:/home/miguel/django
-    command: bash -c "cd /home/miguel/django/mlpbarreiro && gunicorn --bind 0.0.0.0:8001 mlpbarreiro.wsgi"
+    #command: bash -c "cd /home/miguel/django/mlpbarreiro && gunicorn --bind 0.0.0.0:8001 mlpbarreiro.wsgi"
+    command: bash -c "cd /home/miguel/django/mlpbarreiro && python manage.py runserver 0:8000"
     depends_on: 
-      - db_migest
-    expose: 
-      - 8001
+      db_migest:
+        condition: service_healthy
+    ports: 
+      - 8000:8000
     restart: always
-    networks: 
-      - migest
   db_migest:
-    build:
-      context: .
-      dockerfile: ./mysql/Dockerfile
+    image: mysql:8.0
     command: --default-authentication-plugin=mysql_native_password
     restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: example
+      MYSQL_DATABASE: migest
+      MYSQL_USER: miguel
+      MYSQL_PASSWORD: example
     volumes: 
       - dbdata:/var/lib/mysql
-      - ../db_backups:/db_backups
-    networks: 
-      - migest
-    env_file: ./mysql/.env
+    ports:
+      - 33006:3306
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      interval: 3s
+      timeout: 5s
+      retries: 5
 volumes: 
   dbdata:
-networks:
-  migest:
-  webproxy: 
-    external: true

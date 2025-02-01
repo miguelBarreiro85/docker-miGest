@@ -1,0 +1,35 @@
+# Use root/example as user/password credentials
+version: "3.7"
+services:
+  web_migest:
+    image: nginx
+    volumes:
+     - ./web/rma_mlp:/etc/nginx/conf.d/rma2.mlpbarreiro.com.conf
+     - ../django/static:/home/miguel/django/static
+    expose:
+      - 80
+    environment:
+      - VIRTUAL_HOST=rma2.mlpbarreiro.com
+      - LETSENCRYPT_HOST=rma2.mlpbarreiro.com
+      - LETSENCRYPT_EMAIL=mlpbarreiro@gmail.com
+    links: 
+      - python_migest
+    restart: always
+    networks: 
+      - webproxy
+      - migest
+  python_migest:
+    expose: 
+      - 8001
+    restart: always
+    networks: 
+      - migest
+  db_migest:
+    networks: 
+      - migest
+volumes: 
+  dbdata:
+networks:
+  migest:
+  webproxy: 
+    external: true
