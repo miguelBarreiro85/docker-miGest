@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import Assistencia, Pessoa, Cliente, Funcionario, User
 from django.utils.html import format_html
-from django.urls import reverse, path
+from django.urls import reverse, path, re_path
 from django.conf import settings
 from django.http import HttpResponse
 from reportlab.pdfgen import canvas
@@ -89,12 +89,12 @@ class AssistenciaAdmin(admin.ModelAdmin):
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
-            path(
+            re_path(
                 r'^(?P<assistencia_id>.+)/print/$',
                 self.admin_site.admin_view(self.print_assist),
                 name='print-assist',
             ),
-            path(
+            re_path(
                 r'^(?P<assistencia_id>.+)/print_talao/$',
                 self.admin_site.admin_view(self.print_talao),
                 name='print-assist-talao',

@@ -1,0 +1,8 @@
+* {
+    font-size: 1.2rem !important;
+    line-height: 1.5rem !important;
+}
+
+.submit-row a.deletelink {
+    height: 43px !important;
+}
