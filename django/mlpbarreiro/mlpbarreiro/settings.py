@@ -72,21 +72,14 @@ WSGI_APPLICATION = 'mlpbarreiro.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/2.0/ref/settings/#databases
-
-#DATABASES = {
- #   'default': {
-  #      'ENGINE': 'django.db.backends.sqlite3',
-   #     'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
-    #}
-#}
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        #'ENGINE': 'mysql.connector.django',
-        'OPTIONS': {
-            'read_default_file': '/home/miguel/django/mlpbarreiro/sql.cnf',
-        },
+        'NAME': os.getenv('MYSQL_DATABASE'),
+        'USER': os.getenv('MYSQL_USER'),
+        'PASSWORD': os.getenv('MYSQL_PASSWORD'),
+        'HOST': 'db_migest',
+        'PORT': '3306', 
     }
 }
 

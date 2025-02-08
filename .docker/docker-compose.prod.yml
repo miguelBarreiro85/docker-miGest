@@ -24,6 +24,7 @@ services:
     restart: always
     networks: 
       - migest
+    command: bash -c "cd /home/miguel/django/mlpbarreiro && gunicorn --bind 0.0.0.0:8001 mlpbarreiro.wsgi"
   db_migest:
     networks: 
       - migest
